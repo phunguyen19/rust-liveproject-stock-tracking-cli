@@ -1,7 +1,11 @@
+use async_std::stream;
 use async_trait::async_trait;
 use chrono::prelude::*;
 use clap::Parser;
+use futures::future::join_all;
+use futures::stream::StreamExt;
 use std::io::{Error, ErrorKind};
+use std::time::Duration;
 use yahoo_finance_api as yahoo;
 
 #[cfg(test)]
@@ -14,16 +18,6 @@ struct Args {
     symbols: String,
     #[clap(short, long)]
     from: String,
-}
-
-/// Share behaviors to calculate the
-/// signal of stock based on the history price
-trait StockSignal {
-    /// The signal result after calculation
-    type SignalType;
-
-    /// Calculate the signal base on history price
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
 }
 
 /// A trait to provide a common interface for all signal calculations.
@@ -151,9 +145,7 @@ impl AsyncStockSignal for WindowedSMA {
     }
 }
 
-///
 /// Retrieve data from a data source and extract the closing prices. Errors during download are mapped onto io::Errors as InvalidData.
-///
 async fn fetch_closing_data(
     symbol: &str,
     beginning: &DateTime<Utc>,
@@ -178,43 +170,76 @@ async fn fetch_closing_data(
     }
 }
 
+/// This functions will do 3 things:
+/// - First, fetch the data
+/// - Then, calculate all the signals
+/// - Final, it print the output through stdout
+async fn fetch_n_calculate_n_output(
+    symbol: &str,
+    from: &DateTime<Utc>,
+    to: &DateTime<Utc>,
+) -> std::io::Result<()> {
+    // Fetching data
+    let closes = fetch_closing_data(&symbol, &from, &to).await?;
+
+    // Check if fetched data is not empty
+    if !closes.is_empty() {
+        // Calculate all the signal
+        let period_max: f64 = MaxPrice {}.calculate(&closes).await.unwrap();
+        let period_min: f64 = MinPrice {}.calculate(&closes).await.unwrap();
+        let last_price = *closes.last().unwrap_or(&0.0);
+        let (_, pct_change) = PriceDifference {}
+            .calculate(&closes)
+            .await
+            .unwrap_or((0.0, 0.0));
+        let sma = WindowedSMA { window_size: 30 }
+            .calculate(&closes)
+            .await
+            .unwrap_or_default();
+
+        // Output the data through stdout
+        println!(
+            "{},{},${:.2},{:.2}%,${:.2},${:.2},${:.2}",
+            from.to_rfc3339(),
+            symbol,
+            last_price,
+            pct_change * 100.0,
+            period_min,
+            period_max,
+            sma.last().unwrap_or(&0.0)
+        );
+    }
+
+    Ok(())
+}
+
 #[async_std::main]
 async fn main() -> std::io::Result<()> {
+    // Reading CLI args input
     let opts = Args::parse();
     let from: DateTime<Utc> = opts.from.parse().expect("Couldn't parse 'from' date");
-    let to = Utc::now();
+    let symbols = opts.symbols;
 
-    // a simple way to output a CSV header
+    // Print the header of data as CSV format through stdout
     println!("period start,symbol,price,change %,min,max,30d avg");
-    for symbol in opts.symbols.split(',') {
-        let closes = fetch_closing_data(&symbol, &from, &to).await?;
 
-        if !closes.is_empty() {
-            // min/max of the period. unwrap() because those are Option types
-            let period_max: f64 = MaxPrice {}.calculate(&closes).await.unwrap();
-            let period_min: f64 = MinPrice {}.calculate(&closes).await.unwrap();
-            let last_price = *closes.last().unwrap_or(&0.0);
-            let (_, pct_change) = PriceDifference {}
-                .calculate(&closes)
-                .await
-                .unwrap_or((0.0, 0.0));
-            let sma = WindowedSMA { window_size: 30 }
-                .calculate(&closes)
-                .await
-                .unwrap_or_default();
+    // Init the interval counter
+    let mut interval = stream::interval(Duration::from_secs(5));
 
-            // a simple way to output CSV data
-            println!(
-                "{},{},${:.2},{:.2}%,${:.2},${:.2},${:.2}",
-                from.to_rfc3339(),
-                symbol,
-                last_price,
-                pct_change * 100.0,
-                period_min,
-                period_max,
-                sma.last().unwrap_or(&0.0)
-            );
+    // Run the interval
+    while let Some(_) = interval.next().await {
+        // Init the current moment
+        let to = Utc::now();
+        // Create the vector to store the result form async call functions
+        let mut futures = vec![];
+        // Loop loop through the symbols
+        // and call the async function of calculation for each symbol
+        for symbol in symbols.split(',') {
+            futures.push(fetch_n_calculate_n_output(symbol, &from, &to));
         }
+        // Execute async functions
+        join_all(futures).await;
     }
+
     Ok(())
 }
