@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo check",
+      "type": "cargo",
+      "subcommand": "check",
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo build",
+      "type": "cargo",
+      "subcommand": "build",
+      "group": "build",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo test",
+      "type": "cargo",
+      "subcommand": "test",
+      "group": "test",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "run test command",
+      "type": "shell",
+      "command": "cargo run -- --from 2020-07-03T12:00:09Z --symbols LYFT,MSFT,AAPL,UBER,LYFT,FB,AMD,GOOG",
+      "group": "test"
+    },
+    {
+      "label": "run test command and save to result.csv",
+      "type": "shell",
+      "command": "cargo run -- --from 2020-07-03T12:00:09Z --symbols LYFT,MSFT,AAPL,UBER,LYFT,FB,AMD,GOOG > result.csv",
+      "group": "test"
+    }
+  ]
+}

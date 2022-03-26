@@ -1,17 +1,14 @@
+use async_trait::async_trait;
 use chrono::prelude::*;
-use clap::Clap;
+use clap::Parser;
 use std::io::{Error, ErrorKind};
 use yahoo_finance_api as yahoo;
 
 #[cfg(test)]
 mod test;
 
-#[derive(Clap)]
-#[clap(
-    version = "1.0",
-    author = "Claus Matzinger",
-    about = "A Manning LiveProject: async Rust"
-)]
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long, default_value = "AAPL,MSFT,UBER,GOOG")]
     symbols: String,
@@ -29,11 +26,30 @@ trait StockSignal {
     fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
 }
 
+/// A trait to provide a common interface for all signal calculations.
+#[async_trait]
+trait AsyncStockSignal {
+    ///
+    /// The signal's data type.
+    ///
+    type SignalType;
+
+    ///
+    /// Calculate the signal on the provided series.
+    ///
+    /// # Returns
+    ///
+    /// The signal (using the provided type) or `None` on error/invalid data.
+    ///
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
+}
+
 /// Struct to implement the stock signal
 /// to calculate the price difference from history
 struct PriceDifference {}
 
-impl StockSignal for PriceDifference {
+#[async_trait]
+impl AsyncStockSignal for PriceDifference {
     /// Stock signal for price difference
     /// contains 2 numbers:
     /// - absolute difference
@@ -47,7 +63,7 @@ impl StockSignal for PriceDifference {
     ///
     /// A tuple `(absolute, relative)` difference.
     ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
         if !series.is_empty() {
             // unwrap is safe here even if first == last
             let (first, last) = (series.first().unwrap(), series.last().unwrap());
@@ -67,13 +83,14 @@ struct MinPrice {}
 
 /// Implement stock signal trait to
 /// calculate min price
-impl StockSignal for MinPrice {
+#[async_trait]
+impl AsyncStockSignal for MinPrice {
     type SignalType = f64;
 
     ///
     /// Find the minimum in a series of f64
     ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
         if series.is_empty() {
             None
         } else {
@@ -88,13 +105,14 @@ struct MaxPrice {}
 
 /// Implement stock signal trait
 /// to calculate max price from history
-impl StockSignal for MaxPrice {
+#[async_trait]
+impl AsyncStockSignal for MaxPrice {
     type SignalType = f64;
 
     ///
     /// Find the maximum in a series of f64
     ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
         if series.is_empty() {
             None
         } else {
@@ -111,13 +129,14 @@ struct WindowedSMA {
 
 /// Implement stock signal to
 /// calculate Simple Moving Average
-impl StockSignal for WindowedSMA {
+#[async_trait]
+impl AsyncStockSignal for WindowedSMA {
     type SignalType = Vec<f64>;
 
     ///
     /// Find the maximum in a series of f64
     ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
+    async fn calculate(&self, series: &[f64]) -> Option<Self::SignalType> {
         let n = self.window_size;
         if !series.is_empty() && n > 1 {
             Some(
@@ -133,28 +152,9 @@ impl StockSignal for WindowedSMA {
 }
 
 ///
-/// A trait to provide a common interface for all signal calculations.
-///
-trait AsyncStockSignal {
-    ///
-    /// The signal's data type.
-    ///
-    type SignalType;
-
-    ///
-    /// Calculate the signal on the provided series.
-    ///
-    /// # Returns
-    ///
-    /// The signal (using the provided type) or `None` on error/invalid data.
-    ///
-    fn calculate(&self, series: &[f64]) -> Option<Self::SignalType>;
-}
-
-///
 /// Retrieve data from a data source and extract the closing prices. Errors during download are mapped onto io::Errors as InvalidData.
 ///
-fn fetch_closing_data(
+async fn fetch_closing_data(
     symbol: &str,
     beginning: &DateTime<Utc>,
     end: &DateTime<Utc>,
@@ -163,10 +163,13 @@ fn fetch_closing_data(
 
     let response = provider
         .get_quote_history(symbol, *beginning, *end)
+        .await
         .map_err(|_| Error::from(ErrorKind::InvalidData))?;
+
     let mut quotes = response
         .quotes()
         .map_err(|_| Error::from(ErrorKind::InvalidData))?;
+
     if !quotes.is_empty() {
         quotes.sort_by_cached_key(|k| k.timestamp);
         Ok(quotes.iter().map(|q| q.adjclose as f64).collect())
@@ -175,7 +178,8 @@ fn fetch_closing_data(
     }
 }
 
-fn main() -> std::io::Result<()> {
+#[async_std::main]
+async fn main() -> std::io::Result<()> {
     let opts = Args::parse();
     let from: DateTime<Utc> = opts.from.parse().expect("Couldn't parse 'from' date");
     let to = Utc::now();
@@ -183,16 +187,20 @@ fn main() -> std::io::Result<()> {
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
     for symbol in opts.symbols.split(',') {
-        let closes = fetch_closing_data(&symbol, &from, &to)?;
+        let closes = fetch_closing_data(&symbol, &from, &to).await?;
 
         if !closes.is_empty() {
             // min/max of the period. unwrap() because those are Option types
-            let period_max: f64 = MaxPrice {}.calculate(&closes).unwrap();
-            let period_min: f64 = MinPrice {}.calculate(&closes).unwrap();
+            let period_max: f64 = MaxPrice {}.calculate(&closes).await.unwrap();
+            let period_min: f64 = MinPrice {}.calculate(&closes).await.unwrap();
             let last_price = *closes.last().unwrap_or(&0.0);
-            let (_, pct_change) = PriceDifference {}.calculate(&closes).unwrap_or((0.0, 0.0));
+            let (_, pct_change) = PriceDifference {}
+                .calculate(&closes)
+                .await
+                .unwrap_or((0.0, 0.0));
             let sma = WindowedSMA { window_size: 30 }
                 .calculate(&closes)
+                .await
                 .unwrap_or_default();
 
             // a simple way to output CSV data
