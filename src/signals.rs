@@ -1,24 +1,4 @@
 use async_trait::async_trait;
-use clap::Parser;
-
-///
-/// Struct to store arguments from command
-///
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-pub struct Args {
-    ///
-    /// Stock symbols. E.g: AAPL,MSFT,UBER,GOOG
-    ///
-    #[clap(short, long, default_value = "AAPL,MSFT,UBER,GOOG")]
-    pub symbols: String,
-
-    ///
-    /// Date in the past to start fetching prices
-    ///
-    #[clap(short, long)]
-    pub from: String,
-}
 
 ///
 /// A trait to provide a common interface for all signal calculations.

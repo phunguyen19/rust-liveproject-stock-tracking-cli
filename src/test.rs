@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use super::*;
+use crate::signals::*;
 
 #[async_std::test]
 async fn test_PriceDifference_calculate() {
