@@ -46,9 +46,14 @@ async fn main() -> std::io::Result<()> {
     let _fetcher_addr = actors::fetcher::Fetcher {}.start().await;
     let _processor_addr = actors::processor::Processor {}.start().await;
     let _writer_addr = actors::writer::Writer::new(output_file_name).start().await;
+    let _http_server_addr = actors::http_server::HttpServer {}.start().await;
+
+    let _ = Broker::from_registry()
+        .await
+        .unwrap()
+        .publish(actors::messages::StartHttpServer);
 
     let mut interval = stream::interval(Duration::from_secs(5));
-
     while let Some(_) = interval.next().await {
         // Init the current moment
         let to = Utc::now();

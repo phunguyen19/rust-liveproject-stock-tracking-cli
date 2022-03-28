@@ -28,3 +28,10 @@ pub struct Indicators {
     pub period_max: f64,
     pub sma: Vec<f64>,
 }
+#[message]
+#[derive(Debug, Clone)]
+pub struct StartHttpServer;
+
+#[message]
+#[derive(Debug, Clone)]
+pub struct TailIndicators(u16);
