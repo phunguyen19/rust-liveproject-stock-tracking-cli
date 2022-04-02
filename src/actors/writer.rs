@@ -1,8 +1,9 @@
-use super::messages::*;
 use async_std::fs::{File, OpenOptions};
 use async_std::io::WriteExt;
 use async_trait::async_trait;
 use xactor::*;
+
+use crate::messages::*;
 
 pub struct Writer {
     filename: String,
@@ -47,7 +48,7 @@ impl Handler<Indicators> for Writer {
                 msg.pct_change * 100.0,
                 msg.period_min,
                 msg.period_max,
-                msg.sma.last().unwrap_or(&0.0),
+                msg.last_sma,
             );
 
             let _ = file.write(s.as_bytes()).await;

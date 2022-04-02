@@ -1,7 +1,8 @@
-use super::messages::*;
 use crate::signals::*;
 use async_trait::async_trait;
 use xactor::*;
+
+use crate::messages::*;
 
 pub struct Processor;
 
@@ -27,7 +28,7 @@ impl Handler<Quote> for Processor {
             .calculate(&msg.series)
             .await
             .unwrap_or((0.0, 0.0));
-        let sma = WindowedSMA { window_size: 30 }
+        let mut sma = WindowedSMA { window_size: 30 }
             .calculate(&msg.series)
             .await
             .unwrap_or_default();
@@ -39,7 +40,7 @@ impl Handler<Quote> for Processor {
             pct_change,
             period_min,
             period_max,
-            sma: sma.clone(),
+            last_sma: sma.pop().unwrap_or(0.0),
         };
 
         let _ = Broker::from_registry().await.unwrap().publish(indicators);

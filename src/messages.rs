@@ -1,4 +1,5 @@
 use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
 use xactor::*;
 
 #[message]
@@ -18,7 +19,7 @@ pub struct Quote {
 }
 
 #[message]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Indicators {
     pub symbol: String,
     pub from: DateTime<Utc>,
@@ -26,11 +27,11 @@ pub struct Indicators {
     pub pct_change: f64,
     pub period_min: f64,
     pub period_max: f64,
-    pub sma: Vec<f64>,
+    pub last_sma: f64,
 }
 #[message]
 #[derive(Debug, Clone)]
-pub struct StartHttpServer;
+pub struct StartHttpServer(pub u32);
 
 #[message]
 #[derive(Debug, Clone)]

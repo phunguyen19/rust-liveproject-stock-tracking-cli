@@ -1128,6 +1128,7 @@ dependencies = [
  "clap",
  "futures",
  "serde",
+ "serde_json",
  "tide",
  "xactor",
  "yahoo_finance_api",
