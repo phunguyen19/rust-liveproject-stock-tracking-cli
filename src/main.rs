@@ -48,10 +48,13 @@ async fn main() -> std::io::Result<()> {
     let _processor_addr = actors::processor::Processor {}.start().await;
     let _writer_addr = actors::writer::Writer::new(output_file_name).start().await;
 
-    let data_holder = actors::data_holder::DataHolder::new();
-    let _data_holder_addr = data_holder.clone().start().await;
+    let data_holder_addr = actors::data_holder::DataHolder::new()
+        .clone()
+        .start()
+        .await
+        .unwrap();
 
-    let _http_server_addr = actors::http_server::HttpServer { data_holder }
+    let _http_server_addr = actors::http_server::HttpServer::new(data_holder_addr)
         .start()
         .await;
 

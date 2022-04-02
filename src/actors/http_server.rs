@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use serde_json;
-use std::ops::Range;
 use tide::Request;
 use xactor::*;
 
@@ -8,7 +7,13 @@ use super::data_holder::*;
 use crate::messages::*;
 
 pub struct HttpServer {
-    pub data_holder: DataHolder,
+    pub data_holder_addr: Addr<DataHolder>,
+}
+
+impl HttpServer {
+    pub fn new(data_holder_addr: Addr<DataHolder>) -> Self {
+        Self { data_holder_addr }
+    }
 }
 
 #[async_trait]
@@ -22,32 +27,15 @@ impl Actor for HttpServer {
 impl Handler<StartHttpServer> for HttpServer {
     async fn handle(&mut self, _ctx: &mut Context<Self>, msg: StartHttpServer) {
         println!("Start HTTP Server at {}", msg.0);
-        let mut app = tide::with_state(self.data_holder.clone());
+        let mut app = tide::with_state(self.data_holder_addr.clone());
         app.at("/tail/:n").get(get_indicators);
         app.listen(format!("127.0.0.1:{}", msg.0)).await.unwrap();
     }
 }
 
-async fn get_indicators(req: Request<DataHolder>) -> tide::Result {
+async fn get_indicators(req: Request<Addr<DataHolder>>) -> tide::Result {
     let state = req.state();
     let n: usize = req.param("n").unwrap().parse().unwrap_or_default();
-    let cloned = state.indicators_vec.clone();
-    let indicators_vec = cloned.lock().unwrap();
-    let mut data: Vec<Indicators> = vec![];
-
-    if n <= 0 {
-        return Ok(serde_json::to_string(&data)?.into());
-    }
-
-    if n > indicators_vec.len() {
-        for item in indicators_vec.clone() {
-            data.push(item.clone());
-        }
-    } else {
-        for item in indicators_vec.range(Range { start: 0, end: n }) {
-            data.push(item.clone());
-        }
-    }
-
+    let data: Vec<Indicators> = state.call(GetIndicators(n)).await?;
     Ok(serde_json::to_string(&data)?.into())
 }

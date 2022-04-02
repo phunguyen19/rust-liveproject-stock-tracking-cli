@@ -33,6 +33,6 @@ pub struct Indicators {
 #[derive(Debug, Clone)]
 pub struct StartHttpServer(pub u32);
 
-#[message]
+#[message(result = "Vec<Indicators>")]
 #[derive(Debug, Clone)]
-pub struct TailIndicators(u16);
+pub struct GetIndicators(pub usize);
