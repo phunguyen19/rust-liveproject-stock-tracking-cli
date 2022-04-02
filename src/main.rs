@@ -1,4 +1,5 @@
 mod actors;
+mod messages;
 mod signals;
 #[cfg(test)]
 mod test;
@@ -46,20 +47,27 @@ async fn main() -> std::io::Result<()> {
     let _fetcher_addr = actors::fetcher::Fetcher {}.start().await;
     let _processor_addr = actors::processor::Processor {}.start().await;
     let _writer_addr = actors::writer::Writer::new(output_file_name).start().await;
-    let _http_server_addr = actors::http_server::HttpServer {}.start().await;
+
+    let data_holder = actors::data_holder::DataHolder::new();
+    let _data_holder_addr = data_holder.clone().start().await;
+
+    let _http_server_addr = actors::http_server::HttpServer { data_holder }
+        .start()
+        .await;
 
     let _ = Broker::from_registry()
         .await
         .unwrap()
-        .publish(actors::messages::StartHttpServer(8080));
+        .publish(messages::StartHttpServer(8080));
 
-    let mut interval = stream::interval(Duration::from_secs(5));
+    let mut interval = stream::interval(Duration::from_secs(30));
+
     while let Some(_) = interval.next().await {
         // Init the current moment
         let to = Utc::now();
         // Loop loop through the symbols
         // and call the async function of calculation for each symbol
-        let fetch_quote = actors::messages::FetchQuotes {
+        let fetch_quote = messages::FetchQuotes {
             symbols: symbols.clone(),
             from,
             to,

@@ -1,10 +1,11 @@
-use super::messages::*;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::io::{Error, ErrorKind};
 use xactor::*;
 use yahoo_finance_api as yahoo;
+
+use crate::messages::*;
 
 pub struct Fetcher;
 
