@@ -1,3 +1,4 @@
+use super::data_holder::*;
 use super::messages::*;
 use async_trait::async_trait;
 use tide::Request;
@@ -14,14 +15,17 @@ impl Actor for HttpServer {
 
 #[async_trait]
 impl Handler<StartHttpServer> for HttpServer {
-    async fn handle(&mut self, _ctx: &mut Context<Self>, _msg: StartHttpServer) {
-        println!("Start HTTP Server");
-        let mut app = tide::new();
+    async fn handle(&mut self, _ctx: &mut Context<Self>, msg: StartHttpServer) {
+        println!("Start HTTP Server at {}", msg.0);
+        let mut app = tide::with_state(DataHolder::new());
         app.at("/hello").get(hello);
-        app.listen("127.0.0.1:8080").await.unwrap();
+        app.listen(format!("127.0.0.1:{}", msg.0)).await.unwrap();
     }
 }
 
-async fn hello(_: Request<()>) -> tide::Result {
-    Ok(format!("Hello world").into())
+async fn hello(req: Request<DataHolder>) -> tide::Result {
+    let state = req.state();
+    let mut mutable_count = state.req_count.lock().unwrap();
+    *mutable_count += 1;
+    Ok(format!("Hello world {}", mutable_count).into())
 }

@@ -51,7 +51,7 @@ async fn main() -> std::io::Result<()> {
     let _ = Broker::from_registry()
         .await
         .unwrap()
-        .publish(actors::messages::StartHttpServer);
+        .publish(actors::messages::StartHttpServer(8080));
 
     let mut interval = stream::interval(Duration::from_secs(5));
     while let Some(_) = interval.next().await {

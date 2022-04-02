@@ -30,7 +30,7 @@ pub struct Indicators {
 }
 #[message]
 #[derive(Debug, Clone)]
-pub struct StartHttpServer;
+pub struct StartHttpServer(pub u32);
 
 #[message]
 #[derive(Debug, Clone)]
